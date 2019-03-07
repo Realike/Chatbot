@@ -68,7 +68,8 @@ def inputVar(l, voc):
     indexes_batch = [indexesFromSentence(voc, sentence) for sentence in l]  # word2index batch
     lengths = torch.tensor([len(indexes) for indexes in indexes_batch])
     padList = zeroPadding(indexes_batch)
-    padVar = torch.longTensor(padList)  # list to longTensor,shape(max_length, batch_size)
+    padVar = torch.LongTensor(padList)  # list to longTensor,shape(max_length, batch_size)
+    # padVar = torch.tensor(padList, dtype=torch.long)
 
     return padVar, lengths
 
@@ -79,7 +80,8 @@ def outputVar(l, voc):
     max_target_len = max([len(indexes) for indexes in indexes_batch])
     padList = zeroPadding(indexes_batch)
     mask = binaryMatrix(padList)
-    padVar = torch.longTensor(padList)
+    padVar = torch.LongTensor(padList)  # not torch.longTensor
+    # padVar = torch.tensor(padList, dtype=torch.long)
 
     return padVar, mask, max_target_len
 
@@ -103,7 +105,7 @@ batches = batch2TrainData(voc, [random.choice(pairs) for _ in range(small_batch_
 input_variable, lengths, target_variable, mask, max_target_len = batches
 
 print('input_variable:', input_variable)
-print('length:', length)
+print('length:', lengths)
 print('target_variable:' ,target_variable)
 print('mask:', mask)
 print('max_target_len:', max_target_len)
