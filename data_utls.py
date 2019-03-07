@@ -20,6 +20,7 @@ import pickle
 corpus_name = 'cornell movie-dialogs corpus'
 corpus = os.path.join('data', corpus_name)
 
+
 #
 # # testing 10 lines corpus
 def printLines(file, n=10):
@@ -30,12 +31,15 @@ def printLines(file, n=10):
 
 # printLines(os.path.join(corpus, 'movie_lines.txt'))
 
+
 # #
 # Splits each line of the file into a dictionary of fields
 '''
     MOVIE_LINES_FIELDS = ["lineID", "characterID", "movieID", "character", "text"]
     split.(b'L1045 +++$+++ u0 +++$+++ m0 +++$+++ BIANCA +++$+++ They do not!\n')
 '''
+
+
 def loadLines(fileName, fields):
     lines = {}
     with open(fileName, 'r', encoding='iso-8859-1') as f:
@@ -48,6 +52,7 @@ def loadLines(fileName, fields):
             lines[lineObj['lineID']] = lineObj
 
     return lines
+
 
 # #
 # Groups fields of lines from `loadLines` into conversations based on *movie_conversations.txt*
@@ -70,6 +75,7 @@ def loadConversations(fileName, lines, fields):
 
     return conversations
 
+
 # #
 # Extracts pairs of sentences from conversations
 def extractSentencePairs(conversations):
@@ -82,6 +88,7 @@ def extractSentencePairs(conversations):
                 qa_pairs.append([inputLine, targetLine])
 
     return qa_pairs
+
 
 # #
 # create the file. We’ll call it formatted_movie_lines.txt.
@@ -101,7 +108,8 @@ MOVIE_CONVERSATIONS_FIELDS = ['character1ID', 'character2ID', 'movieID', 'uttera
 print('\nProcessing corpus...')
 lines = loadLines(os.path.join(corpus, 'movie_lines.txt'), MOVIE_LINES_FIELDS)
 print('\nLoading conversations...')
-conversations = loadConversations(os.path.join(corpus, 'movie_conversations.txt'), lines, MOVIE_CONVERSATIONS_FIELDS)
+conversations = loadConversations(
+    os.path.join(corpus, 'movie_conversations.txt'), lines, MOVIE_CONVERSATIONS_FIELDS)
 
 # write new csv files
 print('\nWriting newly formatted file...')
@@ -115,7 +123,8 @@ with open(datafile, 'w', encoding='utf-8') as o:
 # printLines(datafile)
 
 
-MAX_LENGTH =10  # Maximun sentence length to consider
+MAX_LENGTH = 10  # Maximun sentence length to consider
+
 
 # Turn a Unicode string to plain ASCII, thanks to
 # https://stackoverflow.com/a/518232/2809427
@@ -125,6 +134,7 @@ def unicodeToAscii(s):
         if unicodedata.category(c) != 'Mn'
     )
 
+
 # Lowercase, trim, and remove non-letter characters
 def normalizeString(s):
     s = unicodeToAscii(s.lower().strip())
@@ -133,6 +143,7 @@ def normalizeString(s):
     s = re.sub(r'\s+', r' ', s).strip()    # 由上可能导致多个空格，把多个空格变为一个空格并去首尾空格
 
     return s
+
 
 # Read query/response pairs and return a voc object
 def readVocs(datafile, corpus_name):
@@ -146,13 +157,13 @@ def readVocs(datafile, corpus_name):
 
 # Returns True iff both sentences in a pair 'p' are under the MAX_LENGTH threshold
 def filterPair(p):
-    return len(p[0].split(' ')) < MAX_LENGTH and len(p[1].split(' ')) <MAX_LENGTH
-
+    return len(p[0].split(' ')) < MAX_LENGTH and len(p[1].split(' ')) < MAX_LENGTH
 
 
 # Filter pairs using filterPair condition
 def filterPairs(pairs):
     return [pair for pair in pairs if filterPair(pair)]
+
 
 # Using the functions defined above, return a populated voc object and pairs list
 def loadPrepareData(corpus, corpus_name, datafile, save_dir):
@@ -180,6 +191,7 @@ print('\n')
 
 MIN_COUNT = 3   # Minimum word count threshold for trimming
 
+
 def trimRareWords(voc, pairs, MIN_COUNT):
     # Trim words used under the MIN_COUNT from the voc
     voc.trim(MIN_COUNT)
@@ -205,8 +217,10 @@ def trimRareWords(voc, pairs, MIN_COUNT):
         if keep_input and keep_output:
             keep_pairs.append(pair)
 
-    print("Trimmed from {} pairs to {}, {:.4f} of total".format(len(pairs), len(keep_pairs), len(keep_pairs) / len(pairs)))
+    print("Trimmed from {} pairs to {}, {:.4f} of total".format(
+        len(pairs), len(keep_pairs), len(keep_pairs) / len(pairs)))
     return keep_pairs
+
 
 # Trim voc and pairs
 pairs = trimRareWords(voc, pairs, MIN_COUNT)

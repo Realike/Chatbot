@@ -36,17 +36,21 @@ def loadDataset():
 
     return voc, pairs
 
+
 voc, pairs = loadDataset()
+
 
 #
 # # add EOS_token
 def indexesFromSentence(voc, sentence):
     return [voc.word2index[word] for word in sentence.split(' ')] + [EOS_token]
 
+
 #
 # 通过zip_longest()，zeroPadding时矩阵转置
 def zeroPadding(l, fillvalue=PAD_token):
     return list(itertools.zip_longest(*l, fillvalue=fillvalue))
+
 
 #
 # mask矩阵
@@ -62,6 +66,7 @@ def binaryMatrix(l, value=PAD_token):
 
     return m
 
+
 #
 # Returns padded input sequence tensor and lengths
 def inputVar(l, voc):
@@ -72,6 +77,7 @@ def inputVar(l, voc):
     # padVar = torch.tensor(padList, dtype=torch.long)
 
     return padVar, lengths
+
 
 #
 # # Returns padded target sequence tensor, padding mask, and max target length
@@ -84,6 +90,7 @@ def outputVar(l, voc):
     # padVar = torch.tensor(padList, dtype=torch.long)
 
     return padVar, mask, max_target_len
+
 
 #
 # # Returns all items for a given batch of pairs
@@ -98,6 +105,7 @@ def batch2TrainData(voc, pair_batch):
 
     return inp, lengths, output, mask, max_target_len
 
+
 #
 # Example for validation
 small_batch_size = 5
@@ -106,6 +114,6 @@ input_variable, lengths, target_variable, mask, max_target_len = batches
 
 print('input_variable:', input_variable)
 print('length:', lengths)
-print('target_variable:' ,target_variable)
+print('target_variable:', target_variable)
 print('mask:', mask)
 print('max_target_len:', max_target_len)

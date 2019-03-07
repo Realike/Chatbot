@@ -4,6 +4,7 @@ SOS_token = 1   # start token
 EOS_token = 2   # end token
 UNK_token = 3   # unknown token
 
+
 class Voc:
     def __init__(self, name):
         self.name = name
@@ -29,7 +30,7 @@ class Voc:
     def trim(self, min_count):
         if self.trimmed:
             return
-        self.Trimmed =True
+        self.Trimmed = True
 
         keep_words = []
 
@@ -37,15 +38,13 @@ class Voc:
             if v >= min_count:
                 keep_words.append(k)
 
-        print('keep_words {} / {} = {:.4f}'.format(len(keep_words),
-            len(self.word2index), len(keep_words) / len(self.word2index)))
-
-
+        print('keep_words {} / {} = {:.4f}'.format(
+            len(keep_words), len(self.word2index), len(keep_words) / len(self.word2index)))
         # Reinitialize dictionaries
         self.word2index = {}
         self.word2count = {}
         self.index2word = {PAD_token: 'PAD', SOS_token: 'SOS', EOS_token: 'EOS', UNK_token: 'UNK'}
-        self.num_words = 4 # Count default tokens
+        self.num_words = 4  # Count default tokens
 
         for word in keep_words:
             self.addWord(word)
