@@ -1,8 +1,7 @@
-# Default word tokens
+# Default word tokens   no UNK_token
 PAD_token = 0   # padding token
 SOS_token = 1   # start token
 EOS_token = 2   # end token
-UNK_token = 3   # unknown token
 
 
 class Voc:
@@ -11,8 +10,8 @@ class Voc:
         self.trimmed = False
         self.word2index = {}
         self.word2count = {}
-        self.index2word = {PAD_token: 'PAD', SOS_token: 'SOS', EOS_token: 'EOS', UNK_token: 'UNK'}
-        self.num_words = 4  # Count SOS, EOS, PAD, UNK
+        self.index2word = {PAD_token: 'PAD', SOS_token: 'SOS', EOS_token: 'EOS'}
+        self.num_words = 3  # Count SOS, EOS, PAD
 
     def addSentence(self, sentence):
         for word in sentence.split(' '):
@@ -43,8 +42,8 @@ class Voc:
         # Reinitialize dictionaries
         self.word2index = {}
         self.word2count = {}
-        self.index2word = {PAD_token: 'PAD', SOS_token: 'SOS', EOS_token: 'EOS', UNK_token: 'UNK'}
-        self.num_words = 4  # Count default tokens
+        self.index2word = {PAD_token: 'PAD', SOS_token: 'SOS', EOS_token: 'EOS'}
+        self.num_words = 3  # Count default tokens
 
         for word in keep_words:
             self.addWord(word)
