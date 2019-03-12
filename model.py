@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from vocabulary import PAD_token, SOS_token, EOS_token, UNK_token, Voc
+from vocabulary import PAD_token, SOS_token, EOS_token, Voc
 
 import torch
 from torch.jit import script, trace
@@ -28,10 +28,10 @@ device = torch.device('cuda' if USE_CUDA else 'cpu')
 #
 # # load voc and pairs
 def loadDataset():
-    with open('voc.pkl', 'rb') as handle_voc:
+    with open(os.path.join('data', 'voc.pkl'), 'rb') as handle_voc:
         voc = pickle.load(handle_voc)
 
-    with open('pairs.pkl', 'rb') as handle_pairs:
+    with open(os.path.join('data', 'pairs.pkl'), 'rb') as handle_pairs:
         pairs = pickle.load(handle_pairs)
 
     return voc, pairs
@@ -121,7 +121,7 @@ print('max_target_len:', max_target_len)
 
 #
 # # EncoderRNN
-class EncoderRNN(nn.module):
+class EncoderRNN(nn.Module):
     def __init__(self, hidden_size, embedding, n_layers=1, dropout=0):
         super(EncoderRNN, self).__init__()
         self.n_layers = n_layers

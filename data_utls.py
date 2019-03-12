@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from vocabulary import PAD_token, SOS_token, EOS_token, UNK_token, Voc
+from vocabulary import PAD_token, SOS_token, EOS_token, Voc
 
 import csv
 import random
@@ -228,8 +228,10 @@ pairs = trimRareWords(voc, pairs, MIN_COUNT)
 #
 # store voc and pairs
 print('Storing voc and pairs')
-file_voc = open('voc.pkl', 'wb')
-file_pairs = open('pairs.pkl', 'wb')
+file_voc = open('data/voc.pkl', 'wb')
+file_pairs = open('data/pairs.pkl', 'wb')
+# file_voc = open(os.path.join('data', 'voc.pkl'), 'wb')
+# file_pairs = open(os.path.join('data', 'pairs.pkl'), 'wb')
 pickle.dump(voc, file_voc)
 pickle.dump(pairs, file_pairs)
 file_voc.close()
