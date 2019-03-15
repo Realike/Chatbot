@@ -24,6 +24,7 @@ import pickle
 USE_CUDA = torch.cuda.is_available()
 device = torch.device('cuda' if USE_CUDA else 'cpu')
 
+MAX_LENGTH = 10  # Maximun sentence length to consider
 
 #
 # # load voc and pairs
@@ -106,8 +107,6 @@ def batch2TrainData(voc, pair_batch):
     return inp, lengths, output, mask, max_target_len
 
 
-#
-# Example for validation
 small_batch_size = 5
 batches = batch2TrainData(voc, [random.choice(pairs) for _ in range(small_batch_size)])
 input_variable, lengths, target_variable, mask, max_target_len = batches
@@ -115,6 +114,8 @@ input_variable, lengths, target_variable, mask, max_target_len = batches
 print('input_variable:', input_variable)
 print('length:', lengths)
 print('target_variable:', target_variable)
+# print(target_variable[0])
+# print(target_variable[0].view(1, -1))
 print('mask:', mask)
 print('max_target_len:', max_target_len)
 
@@ -173,7 +174,7 @@ class Attn(torch.nn.Module):
     def __init__(self, method, hidden_size):
         super(Attn, self).__init__
         self.method = method
-        if self.method on in ['dot', 'general', 'concat']:
+        if self.method not in ['dot', 'general', 'concat']:
             raise ValueError(self.method, 'is not an appropriate attention method.')
         self.hidden_size = hidden_size
         if self.method == 'general':
@@ -201,9 +202,9 @@ class Attn(torch.nn.Module):
     def forward(self, hidden, encoder_outputs):
         if self.method == 'general':
             attn_energies = self.general_score(hidden, encoder_outputs)
-        else if self.method == 'concat':
+        elif self.method == 'concat':
             attn_energies = self.concat_score(hidden, encoder_outputs)
-        else if self.method == 'dot':
+        elif self.method == 'dot':
             attn_energies = self.dot_score(hidden, encoder_outputs)
 
         # Transpose max_length and batch_size dimensions
@@ -213,3 +214,117 @@ class Attn(torch.nn.Module):
         # 使用softmax函数把score变成概率，shape仍然是(64, 10)，然后用unsqueeze(1)变成
         # (64, 1, 10)
         return F.softmax(attn_energies, dim=1).unsqueeze(1)
+
+
+#
+# #
+class LuongAttnDecoderRNN(nn.Module):
+    def __init__(self, attn_model, embedding, hidden_size, output_size, n_layers=1, dropout=0.1):
+        supper(LuongAttnDecoderRNN, self).__init__()
+        self.attn_model = attn_model
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+        self.dropout = dropout
+
+        # 定义Decoder layers
+        self.embedding = embedding
+        self.embedding_dropout = nn.Dropout(dropout)
+        self.gru = nn.GRU(hidden_size, hidden_size, n_layers, dropout=(0 if n_layers==1 else dropout))
+        self.concat = nn.Linear(hidden_size * 2, hidden_size)
+        self.out = nn.Linear(hidden_size, output_size)
+
+        self.attn = Attn(attn_model, hidden_size)
+
+    def forward(self, input_step, last_hidden, encoder_outputs):
+        # 注意：decoder每一步只能处理一个时刻的数据，因为t时刻计算完了才能计算t+1时刻。
+        # input_step的shape是(1, 64)，64是batch，1是当前输入的词ID(来自上一个时刻的输出)
+        # 通过embedding层变成(1, 64, 500)，然后进行dropout，shape不变。
+        embedded = self.embedding(input_step)
+        embedded = self.embedding_dropout(embedded)
+        # 把embedded传入GRU进行forward计算
+        # 得到rnn_output的shape是(1, 64, 500)
+        # hidden是(2, 64, 500)，因为是双向的GRU，所以第一维是2。
+        rnn_output, hidden = self.gru(embedded, last_hidden)
+        # 计算注意力权重， 根据前面的分析，attn_weights的shape是(64, 1, 10)
+        attn_weights = self.attn(rnn_output, encoder_outputs)
+
+        # encoder_outputs是(10, 64, 500)
+        # encoder_outputs.transpose(0, 1)后的shape是(64, 10, 500)
+        # attn_weights.bmm后是(64, 1, 500)
+
+        # bmm是批量的矩阵乘法，第一维是batch，我们可以把attn_weights看成64个(1,10)的矩阵
+        # 把encoder_outputs.transpose(0, 1)看成64个(10, 500)的矩阵
+        # 那么bmm就是64个(1, 10)矩阵 x (10, 500)矩阵，最终得到(64, 1, 500)
+        context = attn_weights.bmm(encoder_outputs.transpose(0, 1))
+        # 把context向量和GRU的输出拼接起来
+        # rnn_output从(1, 64, 500)变成(64, 500)
+        rnn_output = rnn_output.squeeze(0)
+        # context从(64, 1, 500)变成(64, 500)
+        context = context.squeeze(1)
+        # 拼接得到(64, 1000)
+        concat_input = torch.cat((rnn_output, context), 1)
+        # self.concat是一个矩阵(1000, 500)，
+        # self.concat(concat_input)的输出是(64, 500)
+        # 然后用tanh把输出返回变成(-1,1)，concat_output的shape是(64, 500)
+        concat_output =torch.tanh(self.concat(concat_input))
+
+        # out是(500, 词典大小=7826)
+        output = self.out(concat_output)
+        # 用softmax变成概率，表示当前时刻输出每个词的概率。
+        output = F.softmax(output, dim=1)
+        # 返回output和新的hidden
+        return output, hidden
+
+
+
+def maskNLLLoss(inp, target, mask):
+    # 计算实际的词的个数，因为padding是0，非padding是1，因此sum就可以得到词的个数
+    nTotal = mask.sum()
+
+    crossEntropy = -torch.log(torch.gather(inp, 1, target.view(-1, 1)).squeeze(1))
+    loss = crossEntropy.masked_select(mask).mean()
+    loss = loss.to(device)
+    return loss, nTotal.item()
+
+
+def train(input_variable, lengths, target_variable, mask, max_target_len, encoder, decoder, embedding,
+        encoder_optimizer, decoder_optimizer, batch_size, clip, max_length=MAX_LENGTH):
+
+    # 梯度清空
+    encoder_optimizer.zero_grad()
+    encoder_optimizer.zero_grad()
+
+    # set device
+    input_variable = input_variable.to(device)
+    lengths = lengths.to(device)
+    target_variable = target_variable.to(device)
+    mask = mask.to(device)
+
+    # initialization
+    loss = 0
+    print_losses = []
+    n_totals = 0
+
+    # encoder Forwarding
+    encoder_outputs, encoder_hidden = encoder(input_variable, lengths)
+
+    # Decoder的初始输入是SOS，我们需要构造(1, batch)的输入，表示第一个时刻batch个输入。
+    decoder_input = torch.LongTensor([[SOS_token for _ in range(batch_size)]])
+    decoder_input = decoder_input.to(device)
+
+    # 注意：Encoder是双向的，而Decoder是单向的，因此从下往上取n_layers个
+    decoder_hidden = encoder_hidden[:decoder.n_layers]
+
+    # 确定是否teacher_forcing
+    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
+
+    # 一次处理一个时刻
+    if use_teacher_forcing:
+        for t in range(max_target_len):
+            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            # Teacher forcing: 下一个时刻的输入是当前正确答案
+            decoder_input = target_variable[t].view(1, -1)  # view()将取出的.[t] tensor([...])改为tensor([[...]])
+            #计算累计的loss
+            mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
+            
