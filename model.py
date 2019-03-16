@@ -20,6 +20,7 @@ from io import open
 import itertools
 import math
 import pickle
+import numpy as np
 
 USE_CUDA = torch.cuda.is_available()
 device = torch.device('cuda' if USE_CUDA else 'cpu')
@@ -114,8 +115,6 @@ input_variable, lengths, target_variable, mask, max_target_len = batches
 print('input_variable:', input_variable)
 print('length:', lengths)
 print('target_variable:', target_variable)
-# print(target_variable[0])
-# print(target_variable[0].view(1, -1))
 print('mask:', mask)
 print('max_target_len:', max_target_len)
 
@@ -325,6 +324,122 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
             decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden, encoder_outputs)
             # Teacher forcing: 下一个时刻的输入是当前正确答案
             decoder_input = target_variable[t].view(1, -1)  # view()将取出的.[t] tensor([...])改为tensor([[...]])
-            #计算累计的loss
+            #计算累计的loss, mask_loss: nTotal平均loss
             mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
-            
+            loss += mask_loss
+            print_losses.append(mask_loss.item() * nTotal)
+            n_totals += nTotal
+    else:
+        for t in range(max_target_len):
+            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            # 不是teacher forcing: 下一个时刻的输入是当前模型预测概率最高的值
+            _, topi = decoder_output.topK(1)
+            decoder_input = torch.LongTensor([[topi[i][0] for i in range(batch_size)]])
+            decoder_input =decoder_input.to(device)
+            #计算累计的loss, mask_loss: nTotal的平均loss
+            mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
+            loss += mask_loss
+            print_losses.append(mask_loss.item() * nTotal)
+            n_totals += nTotal
+
+    # 反向计算
+    loss.backward()
+
+    # 对encoder和decoder进行梯度裁剪
+    _ = torch.nn.utils.clip_grad_norm_(encoder.parameters(), clip)
+    _ = torch.nn.utils.clip_grad_norm_(decoder.parameters(), clip)
+
+    # 更新参数
+    encoder_optimizer.step()
+    decoder_optimizer.step()
+
+    return sum(print_losses) / n_totals
+
+
+def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, decoder_optimizer,
+        embedding, encoder_n_layers, decoder_n_layers, save_dir, n_iteration, batch_size, print_every,
+        save_every, clip, corpus_name, loadFilename):
+
+    # 随机选择n_iteration个batch的数据(pair)
+    training_batches = [batch2TrainData(voc, [random.choice(pairs) for _ in range(batch_size)])
+        for _ in range(n_iteration)]
+
+    # 初始化
+    print('Initializing...')
+    start_iteration = 1
+    print_loss = 0
+    if loadFilename:
+        start_iteration = checkpoint['iteration'] + 1
+
+    # 训练
+    print('Training...')
+    for iteration in range(start_iteration, n_iteration + 1):
+        training_batch = training_batches[iteration - 1]
+        input_variable, lengths, target_variable, mask, max_target_len = training_batch
+
+        # 训练一个batch的数据
+        loss = train(input_variable, lengths, target_variable, mask, max_target_len, encoder,
+                        decoder, embedding, encoder_optimizer, decoder_optimizer, batch_size, clip)
+
+        print_loss += loss
+
+        # 进度
+        if iteration % print_every == 0:
+            print_loss_avg = print_loss / print_every
+            print('Iteration: {}; Percent complete: {:.1f}%; Average loss: {:.4f}'.format(
+                iteration, iteration / n_iteration * 100, print_loss_avg))
+            print_loss = 0
+
+        # 保存checkpoint
+        if(iteration % save_every == 0):
+            directory = os.path.join(save_dir, model_name, corpus_name, '{}-{}_{}'.format(
+                encoder_n_layers, decoder_n_layers, hidden_size))
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            torch.save({
+                'iteration': iteration,
+                'en': encoder.state_dict(),
+                'de': decoder.state_dict(),
+                'en_opt': encoder_optimizer.state_dict(),
+                'de_opt': decoder_optimizer.state_dict(),
+                'loss': loss.state_dict(),
+                'voc_dict': voc.__dict__,
+                'embedding': embedding.state_dict()
+            }, os.path.join(directory, '{}_{}.tar'.format(iteration, 'checkpoint')))
+
+
+#
+# # 贪心解码
+class GreedySearchDecoder(nn.Module):
+    def __init__(self, encoder, decoder):
+        super(GreedySearchDecoder, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def forward(self, input_seq, input_length, max_length):
+        # Encoder的Forward计算
+        encoder_outputs, encoder_hidden = self.encoder(input_seq, input_length)
+        # 把Encoder最后时刻的隐状态作为Decoder的初始值
+        decoder_hidden = encoder_hidden[:decoder.n_layers]
+        # 因为我们的函数都是要求(time,batch)，因此即使只有一个数据，也要做出二维的。
+        # Decoder的初始输入是SOS
+        decoder_input = torch.ones(1, 1, device=device, dtype=torch.long) * SOS_token
+        # 用于保存解码结果的tensor
+        all_tokens = torch.zeros([0], device=device, dtype=torch.long)
+        all_scores = torch.zeros([0], device=device)
+        # 循环，这里只使用长度限制，后面处理的时候把EOS去掉了。
+        for _ in range(max_length):
+            # Decoder forward一步
+            decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden,encoder_outputs)
+            # decoder_outputs是(batch=1, vob_size)
+            # 使用max返回概率最大的词和得分
+            decoder_scores, decoder_input = torch.max(decoder_output, dim=1)
+            # 把解码结果保存到all_tokens和all_scores里
+            all_tokens = torch.cat((all_tokens, decoder_input), dim=0)
+            all_scores = torch.cat((all_scores, decoder_scores), dim=0)
+            # decoder_input是当前时刻输出的词的ID，这是个一维的向量，因为max会减少一维。
+            # 但是decoder要求有一个batch维度，因此用unsqueeze增加batch维度。
+            decoder_input = torch.unsqueeze(decoder_input, 0)
+
+        # 返回所有的词和得分。
+        return all_tokens, all_scores
