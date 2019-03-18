@@ -49,8 +49,8 @@ corpus = os.path.join('data', corpus_name)
 # 配置模型
 model_name = 'cb_model'
 attn_model = 'dot'
-attn_model = 'general'
-attn_model = 'concat'
+# attn_model = 'general'
+# attn_model = 'concat'
 hidden_size = 500
 encoder_n_layers = 2
 decoder_n_layers = 2

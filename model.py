@@ -459,9 +459,9 @@ def evaluate(encoder, decoder, searcher, voc, sentence, max_length=MAX_LENGTH):
     # use GreedySearchDecoder
     tokens, scores = searcher(input_batch, lengths, max_length)
     # ID变成词
-    decode_words = [voc.index2word[token.item()] for token in tokens]
+    decoded_words = [voc.index2word[token.item()] for token in tokens]
 
-    return decode_words
+    return decoded_words
 
 # Turn a Unicode string to plain ASCII, thanks to
 # https://stackoverflow.com/a/518232/2809427
@@ -490,13 +490,15 @@ def evaluateInput(encoder, decoder, searcher, voc):
             # gen evaluate sentence
             output_words = evaluate(encoder, decoder, searcher, voc, input_sentence)
             # remove 'EOS' and 'PAD'
-            words = []
-            for word in output_words:
-                if word == 'EOS':
-                    break
-                elif word != 'PAD':
-                    words.append(word)
-            print('Bot:', ' '.join(words))
+            # words = []
+            # for word in output_words:
+            #     if word == 'EOS':
+            #         break
+            #     elif word != 'PAD':
+            #         words.append(word)
+            # print('Bot:', ' '.join(words))
+            output_words[:] = [x for x in output_words if not (x == 'EOS' or x == 'PAD')]
+            print('Bot:', ' '.join(output_words))
 
         except KeyError:
             print('Error: Encountered unknown word.')
