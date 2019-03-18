@@ -107,16 +107,16 @@ def batch2TrainData(voc, pair_batch):
 
     return inp, lengths, output, mask, max_target_len
 
-
-small_batch_size = 5
-batches = batch2TrainData(voc, [random.choice(pairs) for _ in range(small_batch_size)])
-input_variable, lengths, target_variable, mask, max_target_len = batches
-
-print('input_variable:', input_variable)
-print('length:', lengths)
-print('target_variable:', target_variable)
-print('mask:', mask)
-print('max_target_len:', max_target_len)
+# # testing
+# small_batch_size = 5
+# batches = batch2TrainData(voc, [random.choice(pairs) for _ in range(small_batch_size)])
+# input_variable, lengths, target_variable, mask, max_target_len = batches
+#
+# print('input_variable:', input_variable)
+# print('length:', lengths)
+# print('target_variable:', target_variable)
+# print('mask:', mask)
+# print('max_target_len:', max_target_len)
 
 
 #
@@ -443,3 +443,43 @@ class GreedySearchDecoder(nn.Module):
 
         # 返回所有的词和得分。
         return all_tokens, all_scores
+
+
+def evaluate(encoder, decoder, searcher, voc, sentence, max_length=MAX_LENGTH):
+    # 输入的一个batch句子变成id
+    indexes_batch = [indexesFromSentence(voc, sentence)]
+    # 创建lengths tensor
+    lengths = torch.tensor([len(indexes) for indexes in indexes_batch])
+    # 转置
+    input_batch = torch.LongTensor(indexes_batch).transpose(0, 1)
+    # to GPU
+    input_batch = input_batch.to(device)
+    # use GreedySearchDecoder
+    tokens, scores = searcher(input_batch, lengths, max_length)
+    # ID变成词
+    decode_words = [voc.index2word[token.item()] for token in tokens]
+
+    return decode_words
+
+
+def evaluateInput(encoder, decoder, searcher, voc):
+    input_sentence = ''
+    while(1):
+        try:
+            input_sentence = input('> ')
+            if input_sentence == 'q' or input_sentence == 'quit': break
+            # input_sentence normalization
+            input_sentence = normalizeString(input_sentence)
+            # gen evaluate sentence
+            output_words = evaluate(encoder, decoder, seacher, voc, input_sentence)
+            # remove 'EOS' and 'PAD'
+            words = []
+            for word in output_words:
+                if word == 'EOS':
+                    break
+                elif word != 'PAD':
+                    words.append(word)
+            print('Bot:', ' '.join(words))
+
+        except KeyError:
+            print('Error: Encountered unknown word.')
