@@ -88,6 +88,7 @@ def outputVar(l, voc):
     max_target_len = max([len(indexes) for indexes in indexes_batch])
     padList = zeroPadding(indexes_batch)
     mask = binaryMatrix(padList)
+    mask = torch.ByteTensor(mask)
     padVar = torch.LongTensor(padList)  # not torch.longTensor
     # padVar = torch.tensor(padList, dtype=torch.long)
 
@@ -153,7 +154,7 @@ class EncoderRNN(nn.Module):
         outputs, hidden = self.gru(packed, hidden)
 
         # 参考前面的注释，我们得到outputs为(max_length, batch, hidden*num_directions)
-        outputs, _ = torch.nn.utils.rnn.pad_packed_sequene(outputs)
+        outputs, _ = torch.nn.utils.rnn.pad_packed_sequence(outputs)
         # 我们需要把输出的num_directions双向的向量加起来
         # 因为outputs的第三维是先放前向的hidden_size个结果，然后再放后向的hidden_size个结果
         # 所以outputs[:, :, :self.hidden_size]得到前向的结果
@@ -171,7 +172,7 @@ class EncoderRNN(nn.Module):
 # # Luong attention layer
 class Attn(torch.nn.Module):
     def __init__(self, method, hidden_size):
-        super(Attn, self).__init__
+        super(Attn, self).__init__()
         self.method = method
         if self.method not in ['dot', 'general', 'concat']:
             raise ValueError(self.method, 'is not an appropriate attention method.')
@@ -219,7 +220,7 @@ class Attn(torch.nn.Module):
 # #
 class LuongAttnDecoderRNN(nn.Module):
     def __init__(self, attn_model, embedding, hidden_size, output_size, n_layers=1, dropout=0.1):
-        supper(LuongAttnDecoderRNN, self).__init__()
+        super(LuongAttnDecoderRNN, self).__init__()
         self.attn_model = attn_model
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -280,7 +281,6 @@ class LuongAttnDecoderRNN(nn.Module):
 def maskNLLLoss(inp, target, mask):
     # 计算实际的词的个数，因为padding是0，非padding是1，因此sum就可以得到词的个数
     nTotal = mask.sum()
-
     crossEntropy = -torch.log(torch.gather(inp, 1, target.view(-1, 1)).squeeze(1))
     loss = crossEntropy.masked_select(mask).mean()
     loss = loss.to(device)
@@ -316,6 +316,7 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
     decoder_hidden = encoder_hidden[:decoder.n_layers]
 
     # 确定是否teacher_forcing
+    teacher_forcing_ratio = 1.0
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
 
     # 一次处理一个时刻
@@ -391,6 +392,7 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
             print_loss = 0
 
         # 保存checkpoint
+        hidden_size = 500
         if(iteration % save_every == 0):
             directory = os.path.join(save_dir, model_name, corpus_name, '{}-{}_{}'.format(
                 encoder_n_layers, decoder_n_layers, hidden_size))
@@ -402,7 +404,7 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
                 'de': decoder.state_dict(),
                 'en_opt': encoder_optimizer.state_dict(),
                 'de_opt': decoder_optimizer.state_dict(),
-                'loss': loss.state_dict(),
+                'loss': loss,
                 'voc_dict': voc.__dict__,
                 'embedding': embedding.state_dict()
             }, os.path.join(directory, '{}_{}.tar'.format(iteration, 'checkpoint')))
@@ -420,7 +422,7 @@ class GreedySearchDecoder(nn.Module):
         # Encoder的Forward计算
         encoder_outputs, encoder_hidden = self.encoder(input_seq, input_length)
         # 把Encoder最后时刻的隐状态作为Decoder的初始值
-        decoder_hidden = encoder_hidden[:decoder.n_layers]
+        decoder_hidden = encoder_hidden[:self.decoder.n_layers]
         # 因为我们的函数都是要求(time,batch)，因此即使只有一个数据，也要做出二维的。
         # Decoder的初始输入是SOS
         decoder_input = torch.ones(1, 1, device=device, dtype=torch.long) * SOS_token
@@ -461,6 +463,21 @@ def evaluate(encoder, decoder, searcher, voc, sentence, max_length=MAX_LENGTH):
 
     return decode_words
 
+# Turn a Unicode string to plain ASCII, thanks to
+# https://stackoverflow.com/a/518232/2809427
+def unicodeToAscii(s):
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', s)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+def normalizeString(s):
+    s = unicodeToAscii(s.lower().strip())
+    s = re.sub(r'([.!?])', r' \1', s)   # 标点前增加空格
+    s = re.sub(r'[^a-zA-Z.!?]+', r' ', s)   # 字母和标点之外变成空格
+    s = re.sub(r'\s+', r' ', s).strip()    # 由上可能导致多个空格，把多个空格变为一个空格并去首尾空格
+
+    return s
 
 def evaluateInput(encoder, decoder, searcher, voc):
     input_sentence = ''
@@ -471,7 +488,7 @@ def evaluateInput(encoder, decoder, searcher, voc):
             # input_sentence normalization
             input_sentence = normalizeString(input_sentence)
             # gen evaluate sentence
-            output_words = evaluate(encoder, decoder, seacher, voc, input_sentence)
+            output_words = evaluate(encoder, decoder, searcher, voc, input_sentence)
             # remove 'EOS' and 'PAD'
             words = []
             for word in output_words:
