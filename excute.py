@@ -18,9 +18,10 @@ import itertools
 import math
 import pickle
 import numpy as np
+import sys
 
 from vocabulary import PAD_token, SOS_token, EOS_token, Voc
-from model import EncoderRNN, LuongAttnDecoderRNN, GreedySearchDecoder
+from model import EncoderRNN, LuongAttnDecoderRNN, GreedySearchDecoder, trainIters, evaluateInput
 
 USE_CUDA = torch.cuda.is_available()
 device = torch.device('cuda' if USE_CUDA else 'cpu')
@@ -82,7 +83,7 @@ if loadFilename:
 # initializing encoder and decoder
 encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout)
 decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words,
-                                decoder_n_layers, Dropout)
+                                decoder_n_layers, dropout)
 
 if loadFilename:
     encoder.load_state_dict(encoder_sd)
