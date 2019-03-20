@@ -123,7 +123,7 @@ with open(datafile, 'w', encoding='utf-8') as o:
 # printLines(datafile)
 
 
-MAX_LENGTH = 10  # Maximun sentence length to consider
+MAX_LENGTH = 15  # Maximun sentence length to consider
 
 
 # Turn a Unicode string to plain ASCII, thanks to
@@ -189,7 +189,7 @@ for pair in pairs[:10]:
     print(pair)
 print('\n')
 
-MIN_COUNT = 3   # Minimum word count threshold for trimming
+MIN_COUNT = 2   # Minimum word count threshold for trimming
 
 
 def trimRareWords(voc, pairs, MIN_COUNT):
