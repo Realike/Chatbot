@@ -21,6 +21,7 @@ class Voc:
         if word not in self.word2index:
             self.word2index[word] = self.num_words
             self.word2count[word] = 1
+            self.index2word[self.num_words] = word
             self.num_words += 1
         else:
             self.word2count[word] += 1
@@ -39,6 +40,7 @@ class Voc:
 
         print('keep_words {} / {} = {:.4f}'.format(
             len(keep_words), len(self.word2index), len(keep_words) / len(self.word2index)))
+
         # Reinitialize dictionaries
         self.word2index = {}
         self.word2count = {}

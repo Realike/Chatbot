@@ -288,7 +288,7 @@ def maskNLLLoss(inp, target, mask):
 
 
 def train(input_variable, lengths, target_variable, mask, max_target_len, encoder, decoder, embedding,
-        encoder_optimizer, decoder_optimizer, batch_size, clip, max_length=MAX_LENGTH):
+        encoder_optimizer, decoder_optimizer, batch_size, clip, teacher_forcing_ratio, max_length=MAX_LENGTH):
 
     # 梯度清空
     encoder_optimizer.zero_grad()
@@ -316,7 +316,6 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
     decoder_hidden = encoder_hidden[:decoder.n_layers]
 
     # 确定是否teacher_forcing
-    teacher_forcing_ratio = 1.0
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
 
     # 一次处理一个时刻
@@ -359,7 +358,7 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
 
 def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, decoder_optimizer,
         embedding, encoder_n_layers, decoder_n_layers, save_dir, n_iteration, batch_size, print_every,
-        save_every, clip, corpus_name, loadFilename):
+        save_every, clip, corpus_name, loadFilename, hidden_size, teacher_forcing_ratio):
 
     # 随机选择n_iteration个batch的数据(pair)
     training_batches = [batch2TrainData(voc, [random.choice(pairs) for _ in range(batch_size)])
@@ -380,7 +379,7 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
 
         # 训练一个batch的数据
         loss = train(input_variable, lengths, target_variable, mask, max_target_len, encoder,
-                        decoder, embedding, encoder_optimizer, decoder_optimizer, batch_size, clip)
+                        decoder, embedding, encoder_optimizer, decoder_optimizer, batch_size, clip, teacher_forcing_ratio)
 
         print_loss += loss
 
@@ -392,7 +391,6 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
             print_loss = 0
 
         # 保存checkpoint
-        hidden_size = 500
         if(iteration % save_every == 0):
             directory = os.path.join(save_dir, model_name, corpus_name, '{}-{}_{}'.format(
                 encoder_n_layers, decoder_n_layers, hidden_size))
@@ -487,6 +485,7 @@ def evaluateInput(encoder, decoder, searcher, voc):
             if input_sentence == 'q' or input_sentence == 'quit': break
             # input_sentence normalization
             input_sentence = normalizeString(input_sentence)
+            print(input_sentence)
             # gen evaluate sentence
             output_words = evaluate(encoder, decoder, searcher, voc, input_sentence)
             # remove 'EOS' and 'PAD'

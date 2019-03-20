@@ -51,11 +51,20 @@ model_name = 'cb_model'
 attn_model = 'dot'
 # attn_model = 'general'
 # attn_model = 'concat'
-hidden_size = 500
-encoder_n_layers = 2
-decoder_n_layers = 2
+hidden_size = 512
+encoder_n_layers = 3
+decoder_n_layers = 3
 dropout = 0.1
 batch_size = 64
+
+# 配置超参数和优化器
+clip = 50.0
+teacher_forcing_ratio = 1.0
+learning_rate = 0.0001
+decoder_learning_ratio = 5.0
+n_iteration = 20000
+print_every = 1
+save_every = 500
 
 # 从哪个checkpoint恢复，如果是None，那么从头开始训练。
 loadFilename = None
@@ -93,15 +102,6 @@ if loadFilename:
 encoder = encoder.to(device)
 decoder = decoder.to(device)
 
-# 配置超参数和优化器
-clip = 50.0
-teacher_forcing_ratio = 1.0
-learning_rate = 0.0001
-decoder_learning_ratio = 5.0
-n_iteration = 4000
-print_every = 1
-save_every = 500
-
 # 设置进入训练模式，从而开启dropout
 encoder.train()
 decoder.train()
@@ -119,7 +119,7 @@ if loadFilename:
 def train():
     trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, decoder_optimizer,
                 embedding, encoder_n_layers, decoder_n_layers, save_dir, n_iteration, batch_size,
-                print_every, save_every, clip, corpus_name, loadFilename)
+                print_every, save_every, clip, corpus_name, loadFilename, hidden_size, teacher_forcing_ratio)
 
 #
 # # testing
