@@ -48,13 +48,13 @@ corpus = os.path.join('data', corpus_name)
 
 # 配置模型
 model_name = 'cb_model'
-attn_model = 'dot'
-# attn_model = 'general'
+# attn_model = 'dot'
+attn_model = 'general'
 # attn_model = 'concat'
 hidden_size = 512
-encoder_n_layers = 3
-decoder_n_layers = 3
-dropout = 0.1
+encoder_n_layers = 2
+decoder_n_layers = 2
+dropout = 0.2
 batch_size = 64
 
 # 配置超参数和优化器
@@ -62,9 +62,9 @@ clip = 50.0
 teacher_forcing_ratio = 1.0
 learning_rate = 0.0001
 decoder_learning_ratio = 5.0
-n_iteration = 20000
-print_every = 1
-save_every = 500
+n_iteration = 40000
+print_every = 100
+save_every = 4000
 
 # 从哪个checkpoint恢复，如果是None，那么从头开始训练。
 loadFilename = None

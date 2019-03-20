@@ -190,7 +190,7 @@ class Attn(torch.nn.Module):
         return torch.sum(hidden * encoder_output, dim=2)
 
     def general_score(self, hidden, encoder_output):
-        energy = self.atten(encoder_output)
+        energy = self.attn(encoder_output)
         return torch.sum(hidden * energy, dim=2)
 
     def concat_score(self, hidden, encoder_output):
@@ -485,7 +485,7 @@ def evaluateInput(encoder, decoder, searcher, voc):
             if input_sentence == 'q' or input_sentence == 'quit': break
             # input_sentence normalization
             input_sentence = normalizeString(input_sentence)
-            print(input_sentence)
+            # print(input_sentence)
             # gen evaluate sentence
             output_words = evaluate(encoder, decoder, searcher, voc, input_sentence)
             # remove 'EOS' and 'PAD'
