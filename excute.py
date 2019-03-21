@@ -59,7 +59,7 @@ batch_size = 64
 
 # 配置超参数和优化器
 clip = 5.0
-teacher_forcing_ratio = 0.5
+teacher_forcing_ratio = 1.0
 learning_rate = 0.0001
 decoder_learning_ratio = 5.0
 n_iteration = 100000
