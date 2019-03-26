@@ -103,7 +103,7 @@ def batch2TrainData(voc, pair_batch):
     for pair in pair_batch:
         input_batch.append(pair[0])
         output_batch.append(pair[1])
-    inp, lengths = inputVar(input_batch, voc)
+    inp, lengths = inputVar(input_batch, voc)   # inp: padVar(shape(max_length, batch_size))
     output, mask, max_target_len = outputVar(output_batch, voc)
 
     return inp, lengths, output, mask, max_target_len
@@ -200,6 +200,10 @@ class Attn(torch.nn.Module):
     # 输入是上一个时刻的隐状态hidden和所有时刻的Encoder的输出encoder_outputs
     # 输出是注意力的概率，也就是长度为input_lengths的向量，它的和加起来是1。
     def forward(self, hidden, encoder_outputs):
+        # 假设
+        # 计算注意力的score，输入hidden的shape是(1, batch=64, hidden_size=500)，
+        # 表示t时刻batch数据的隐状态
+        # encoder_outputs的shape是(input_lengths=10, batch=64, hidden_size=500)
         if self.method == 'general':
             attn_energies = self.general_score(hidden, encoder_outputs)
         elif self.method == 'concat':
@@ -208,6 +212,7 @@ class Attn(torch.nn.Module):
             attn_energies = self.dot_score(hidden, encoder_outputs)
 
         # Transpose max_length and batch_size dimensions
+        # attn_energies shape: sum((1, 64, 500) * (10, 64, 500), dim-2) -> (10, 64)
         # 把attn_energies从(max_length=10, batch=64)转置成(64, 10)
         attn_energies = attn_energies.t()
 
@@ -223,7 +228,7 @@ class LuongAttnDecoderRNN(nn.Module):
         super(LuongAttnDecoderRNN, self).__init__()
         self.attn_model = attn_model
         self.hidden_size = hidden_size
-        self.output_size = output_size
+        self.output_size = output_size  # output_size: voc.num_words
         self.n_layers = n_layers
         self.dropout = dropout
 
@@ -238,12 +243,12 @@ class LuongAttnDecoderRNN(nn.Module):
 
     def forward(self, input_step, last_hidden, encoder_outputs):
         # 注意：decoder每一步只能处理一个时刻的数据，因为t时刻计算完了才能计算t+1时刻。
-        # input_step的shape是(1, 64)，64是batch，1是当前输入的词ID(来自上一个时刻的输出)
+        # input_step的shape是(1, 64)，64是batch，0-dim的1是当前输入的词ID(来自上一个时刻的输出)
         # 通过embedding层变成(1, 64, 500)，然后进行dropout，shape不变。
         embedded = self.embedding(input_step)
         embedded = self.embedding_dropout(embedded)
         # 把embedded传入GRU进行forward计算
-        # 得到rnn_output的shape是(1, 64, 500)
+        # 得到rnn_output的shape是(1, 64, 500), rnn_output: 每一步batch的decoder解
         # hidden是(2, 64, 500)，因为是双向的GRU，所以第一维是2。
         rnn_output, hidden = self.gru(embedded, last_hidden)
         # 计算注意力权重， 根据前面的分析，attn_weights的shape是(64, 1, 10)
@@ -253,7 +258,7 @@ class LuongAttnDecoderRNN(nn.Module):
         # encoder_outputs.transpose(0, 1)后的shape是(64, 10, 500)
         # attn_weights.bmm后是(64, 1, 500)
 
-        # bmm是批量的矩阵乘法，第一维是batch，我们可以把attn_weights看成64个(1,10)的矩阵
+        # bmm(batch matrix multiplication)是批量的矩阵乘法，第一维是batch，我们可以把attn_weights看成64个(1,10)的矩阵
         # 把encoder_outputs.transpose(0, 1)看成64个(10, 500)的矩阵
         # 那么bmm就是64个(1, 10)矩阵 x (10, 500)矩阵，最终得到(64, 1, 500)
         context = attn_weights.bmm(encoder_outputs.transpose(0, 1))
@@ -270,6 +275,7 @@ class LuongAttnDecoderRNN(nn.Module):
         concat_output =torch.tanh(self.concat(concat_input))
 
         # out是(500, 词典大小=7826)
+        # output shape(batch=64, output_size=voc.num_words)，0-dim是词ID
         output = self.out(concat_output)
         # 用softmax变成概率，表示当前时刻输出每个词的概率。
         output = F.softmax(output, dim=1)
@@ -277,11 +283,19 @@ class LuongAttnDecoderRNN(nn.Module):
         return output, hidden
 
 
-
+#
+# # mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
+# # decoder_output shape(batch=64, output_size=voc.num_words)，0-dim是词ID
 def maskNLLLoss(inp, target, mask):
+    # target shape(1, 64)
+    # mask shape(1, 64)
     # 计算实际的词的个数，因为padding是0，非padding是1，因此sum就可以得到词的个数
     nTotal = mask.sum()
+    # torch.gather: https://blog.csdn.net/edogawachia/article/details/80515038
+    # torch.gather(inp, 1, target.view(-1, 1)) shape(64, 1)
+    # torch.gather(inp, 1, target.view(-1, 1)).squeeze(1) torch.size([64])
     crossEntropy = -torch.log(torch.gather(inp, 1, target.view(-1, 1)).squeeze(1))
+    # 保留mask[t]中存在的loss，并取平均loss
     loss = crossEntropy.masked_select(mask).mean()
     loss = loss.to(device)
     return loss, nTotal.item()
