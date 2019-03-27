@@ -68,18 +68,19 @@ save_every = 10000
 
 # 从哪个checkpoint恢复，如果是None，那么从头开始训练。
 loadFilename = None
-checkpoint_iter = 4000
+checkpoint_iter = 100000
 
-# loadFilename = os.path.join(save_dir, model_name, corpus_name,
-#                            '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, hidden_size),
-#                            '{}_checkpoint.tar'.format(checkpoint_iter))
+# if loadFilename
+loadFilename = os.path.join(save_dir, model_name, corpus_name,
+                           '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, hidden_size),
+                           '{}_checkpoint.tar'.format(checkpoint_iter))
 
 # 如果loadFilename不空，则从中加载模型
 if loadFilename:
     # 如果训练和加载是一条机器，那么直接加载
     checkpoint = torch.load(loadFilename)
     # 否则比如checkpoint是在GPU上得到的，但是我们现在又用CPU来训练或者测试，那么注释掉下面的代码
-    #checkpoint = torch.load(loadFilename, map_location=torch.device('cpu'))
+    checkpoint = torch.load(loadFilename, map_location=torch.device('cpu'))
     encoder_sd = checkpoint['en']
     decoder_sd = checkpoint['de']
     encoder_optimizer_sd = checkpoint['en_opt']
