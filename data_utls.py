@@ -189,7 +189,7 @@ for pair in pairs[:10]:
     print(pair)
 print('\n')
 
-MIN_COUNT = 2   # Minimum word count threshold for trimming
+MIN_COUNT = 3   # Minimum word count threshold for trimming
 
 
 def trimRareWords(voc, pairs, MIN_COUNT):

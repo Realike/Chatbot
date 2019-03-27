@@ -510,15 +510,13 @@ def evaluateInput(encoder, decoder, searcher, voc):
             # gen evaluate sentence
             output_words = evaluate(encoder, decoder, searcher, voc, input_sentence)
             # remove 'EOS' and 'PAD'
-            # words = []
-            # for word in output_words:
-            #     if word == 'EOS':
-            #         break
-            #     elif word != 'PAD':
-            #         words.append(word)
-            # print('Bot:', ' '.join(words))
-            output_words[:] = [x for x in output_words if not (x == 'EOS' or x == 'PAD')]
-            print('Bot:', ' '.join(output_words))
+            words = []
+            for word in output_words:
+                if word == 'EOS':
+                    break
+                elif word != 'PAD':
+                    words.append(word)
+            print('Bot:', ' '.join(words))
 
         except KeyError:
             print('Error: Encountered unknown word.')

@@ -62,46 +62,22 @@ clip = 5.0
 teacher_forcing_ratio = 0.5
 learning_rate = 0.0001
 decoder_learning_ratio = 5.0
-n_iteration = 100000
-print_every = 100
-save_every = 10000
+n_iteration = 4000
+checkpoint_iter = 4000  # 从哪个checkpoint恢复
+print_every = 10
+save_every = 1000
 
-# 从哪个checkpoint恢复，如果是None，那么从头开始训练。
+# 初始设为None，从头开始训练
+# 此模型未添加断点续训
 loadFilename = None
-checkpoint_iter = 100000
-
-# if loadFilename
-loadFilename = os.path.join(save_dir, model_name, corpus_name,
-                           '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, hidden_size),
-                           '{}_checkpoint.tar'.format(checkpoint_iter))
-
-# 如果loadFilename不空，则从中加载模型
-if loadFilename:
-    # 如果训练和加载是一条机器，那么直接加载
-    checkpoint = torch.load(loadFilename)
-    # 否则比如checkpoint是在GPU上得到的，但是我们现在又用CPU来训练或者测试，那么注释掉下面的代码
-    checkpoint = torch.load(loadFilename, map_location=torch.device('cpu'))
-    encoder_sd = checkpoint['en']
-    decoder_sd = checkpoint['de']
-    encoder_optimizer_sd = checkpoint['en_opt']
-    decoder_optimizer_sd = checkpoint['de_opt']
-    embedding_sd = checkpoint['embedding']
-    voc.__dict__ = checkpoint['voc_dict']
 
 print('Building encoder and decoder ...')
 # Initializing word embedding
 embedding = nn.Embedding(voc.num_words, hidden_size)
-if loadFilename:
-    embedding.load_state_dict(embedding_sd)
 
 # initializing encoder and decoder
 encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout)
-decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words,
-                                decoder_n_layers, dropout)
-
-if loadFilename:
-    encoder.load_state_dict(encoder_sd)
-    decoder.load_state_dict(decoder_sd)
+decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout)
 
 # use device
 encoder = encoder.to(device)
@@ -115,9 +91,34 @@ decoder.train()
 print('Building optimizers ...')
 encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
 decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate * decoder_learning_ratio)
-if loadFilename:
-    encoder_optimizer.load_state_dict(encoder_optimizer_sd)
-    decoder_optimizer.load_state_dict(decoder_optimizer_sd)
+
+# 从checkpoint载入训练保存模型
+def loadCheckpoint():
+    # if loadFilename
+    loadFilename = os.path.join(save_dir, model_name, corpus_name,
+                               '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, hidden_size),
+                               '{}_checkpoint.tar'.format(checkpoint_iter))
+
+    # 如果loadFilename不空，则从中加载模型
+    if loadFilename:
+        # 如果训练和加载是一条机器，那么直接加载
+        checkpoint = torch.load(loadFilename)
+        # 否则比如checkpoint是在GPU上得到的，但是我们现在又用CPU来训练或者测试，那么注释掉下面的代码
+        # checkpoint = torch.load(loadFilename, map_location=torch.device('cpu'))
+        encoder_sd = checkpoint['en']
+        decoder_sd = checkpoint['de']
+        encoder_optimizer_sd = checkpoint['en_opt']
+        decoder_optimizer_sd = checkpoint['de_opt']
+        embedding_sd = checkpoint['embedding']
+        voc.__dict__ = checkpoint['voc_dict']
+
+        embedding.load_state_dict(embedding_sd)
+
+        encoder.load_state_dict(encoder_sd)
+        decoder.load_state_dict(decoder_sd)
+
+        encoder_optimizer.load_state_dict(encoder_optimizer_sd)
+        decoder_optimizer.load_state_dict(decoder_optimizer_sd)
 
 #
 # # training
@@ -126,9 +127,12 @@ def train():
                 embedding, encoder_n_layers, decoder_n_layers, save_dir, n_iteration, batch_size,
                 print_every, save_every, clip, corpus_name, loadFilename, hidden_size, teacher_forcing_ratio)
 
+
 #
 # # testing
 def test():
+    # loadFilename载入checkpoint
+    loadCheckpoint()
     encoder.eval()
     decoder.eval()
 
