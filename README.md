@@ -1,5 +1,4 @@
-# Chatbot
-  Based on pyTorch.
+# Chatbot-pyTorch
 
 # How to train
 1. python data_utls.py
