@@ -287,14 +287,15 @@ class LuongAttnDecoderRNN(nn.Module):
 #
 # # mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
 # # decoder_output shape(batch=64, output_size=voc.num_words)，0-dim是词ID
+# # 对所有batch的target_length单独一步求平均loss
 def maskNLLLoss(inp, target, mask):
-    # target shape(1, 64)
-    # mask shape(1, 64)
+    # target torch.size([64])
+    # mask torch.size([64])
     # 计算实际的词的个数，因为padding是0，非padding是1，因此sum就可以得到词的个数
     nTotal = mask.sum()
     # torch.gather: https://blog.csdn.net/edogawachia/article/details/80515038
-    # torch.gather(inp, 1, target.view(-1, 1)) shape(64, 1)
-    # torch.gather(inp, 1, target.view(-1, 1)).squeeze(1) torch.size([64])
+    # torch.gather(inp, 1, target.view(-1, 1))  shape(64, 1)
+    # torch.gather(inp, 1, target.view(-1, 1)).squeeze(1)   torch.size([64])
     crossEntropy = -torch.log(torch.gather(inp, 1, target.view(-1, 1)).squeeze(1))
     # 保留mask[t]中存在的loss，并取平均loss
     loss = crossEntropy.masked_select(mask).mean()
@@ -349,7 +350,7 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
     else:
         for t in range(max_target_len):
             decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden, encoder_outputs)
-            # 不是teacher forcing: 下一个时刻的输入是当前模型预测概率最高的值
+            # 不是teacher forcing: 下一个时刻的输入是当前模型预测概率最高的值，topi: 概率对应的词ID
             # _, topi = decoder_output.topK(1)
             # decoder_input = torch.LongTensor([[topi[i][0] for i in range(batch_size)]])
             # solve error 'Tensor' object has no attribute 'topK'
@@ -452,13 +453,13 @@ class GreedySearchDecoder(nn.Module):
             # Decoder forward一步
             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden,encoder_outputs)
             # decoder_outputs是(batch=1, vob_size)
-            # 使用max返回概率最大的词和得分
+            # 使用max返回概率最大的得分和词ID
             decoder_scores, decoder_input = torch.max(decoder_output, dim=1)
             # 把解码结果保存到all_tokens和all_scores里
             all_tokens = torch.cat((all_tokens, decoder_input), dim=0)
             all_scores = torch.cat((all_scores, decoder_scores), dim=0)
             # decoder_input是当前时刻输出的词的ID，这是个一维的向量，因为max会减少一维。
-            # 但是decoder要求有一个batch维度，因此用unsqueeze增加batch维度。decoder_input shape(input_step=1, batch_size=1(即decoder_input的ID维度))
+            # 但是decoder要求有一个batch维度，因此用unsqueeze增加batch维度。decoder_input shape(input_step=1(即decoder_input的ID维度), batch_size=1)
             decoder_input = torch.unsqueeze(decoder_input, 0)
 
         # 返回所有的词和得分。
