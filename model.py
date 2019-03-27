@@ -522,3 +522,24 @@ def evaluateInput(encoder, decoder, searcher, voc):
 
         except KeyError:
             print('Error: Encountered unknown word.')
+
+
+
+
+
+
+'''
+model shape总变化
+
+1. (batch_size, max_length)
+
+2. (max_length, batch_size)                                 zeroPadding
+
+3. (max_length, batch_size, hidden_size)                    embedding(voc.num_words, hidden_size)
+
+4. (max_length, batch_size, hidden_size*num_directions)     encoder_outputs(bidirectional)
+
+5. (max_length, batch_size, hidden_size)                    sum(forward-direction, backward-direction)
+   (n_layers*num_directions, batch_size, hidden_size)       last_hidden
+
+'''
