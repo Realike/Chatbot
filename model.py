@@ -296,8 +296,9 @@ def maskNLLLoss(inp, target, mask):
     # torch.gather: https://blog.csdn.net/edogawachia/article/details/80515038
     # torch.gather(inp, 1, target.view(-1, 1))  shape(64, 1)
     # torch.gather(inp, 1, target.view(-1, 1)).squeeze(1)   torch.size([64])
+    # 对于inp：decoder_output(bathch_size, voc.num_words) 取target[t]的ID对应的概率，做crossEntropy
     crossEntropy = -torch.log(torch.gather(inp, 1, target.view(-1, 1)).squeeze(1))
-    # 保留mask[t]中存在的loss，并取平均loss
+    # 对于crossEntropy保留mask[t]中存在的loss，并取平均loss
     loss = crossEntropy.masked_select(mask).mean()
     loss = loss.to(device)
     return loss, nTotal.item()
