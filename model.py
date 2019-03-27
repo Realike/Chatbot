@@ -151,6 +151,7 @@ class EncoderRNN(nn.Module):
         # 而如果输入是PackedSequence对象，那么输出outputs也是一个PackedSequence对象，我们需要用
         # 函数pad_packed_sequence把它变成一个shape为(max_length, batch, hidden*num_directions)的向量以及
         # 一个list，表示输出的长度，当然这个list和输入的input_lengths完全一样，因此通常我们不需要它。
+        # hidden: updated hidden state from GRU; shape=(n_layers x num_directions, batch_size, hidden_size)
         outputs, hidden = self.gru(packed, hidden)
 
         # 参考前面的注释，我们得到outputs为(max_length, batch, hidden*num_directions)
@@ -248,8 +249,9 @@ class LuongAttnDecoderRNN(nn.Module):
         embedded = self.embedding(input_step)
         embedded = self.embedding_dropout(embedded)
         # 把embedded传入GRU进行forward计算
-        # 得到rnn_output的shape是(1, 64, 500), rnn_output: 每一步batch的decoder解
-        # hidden是(2, 64, 500)，因为是双向的GRU，所以第一维是2。
+        # 得到rnn_output的shape(seq_len, batch_size, hidden_size)是(1, 64, 500), rnn_output: 每一batch的decoder解
+        # hidden shape(n_layers x num_directions, batch_size, hidden_size)
+        # hidden是(2, 64, 500)，因为是单向GRU两层layer，所以第一维是2。
         rnn_output, hidden = self.gru(embedded, last_hidden)
         # 计算注意力权重， 根据前面的分析，attn_weights的shape是(64, 1, 10)
         attn_weights = self.attn(rnn_output, encoder_outputs)
@@ -257,7 +259,6 @@ class LuongAttnDecoderRNN(nn.Module):
         # encoder_outputs是(10, 64, 500)
         # encoder_outputs.transpose(0, 1)后的shape是(64, 10, 500)
         # attn_weights.bmm后是(64, 1, 500)
-
         # bmm(batch matrix multiplication)是批量的矩阵乘法，第一维是batch，我们可以把attn_weights看成64个(1,10)的矩阵
         # 把encoder_outputs.transpose(0, 1)看成64个(10, 500)的矩阵
         # 那么bmm就是64个(1, 10)矩阵 x (10, 500)矩阵，最终得到(64, 1, 500)
@@ -320,13 +321,15 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
     n_totals = 0
 
     # encoder Forwarding
+    # encoder_outputs: shape(max_length, batch_size, hidden_size)
+    # encoder_hidden: shape=(n_layers x num_directions, batch_size, hidden_size)
     encoder_outputs, encoder_hidden = encoder(input_variable, lengths)
 
     # Decoder的初始输入是SOS，我们需要构造(1, batch)的输入，表示第一个时刻batch个输入。
     decoder_input = torch.LongTensor([[SOS_token for _ in range(batch_size)]])
     decoder_input = decoder_input.to(device)
 
-    # 注意：Encoder是双向的，而Decoder是单向的，因此从下往上取n_layers个
+    # Set initial decoder hidden state to the encoder's final hidden state
     decoder_hidden = encoder_hidden[:decoder.n_layers]
 
     # 确定是否teacher_forcing
@@ -337,7 +340,7 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
         for t in range(max_target_len):
             decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden, encoder_outputs)
             # Teacher forcing: 下一个时刻的输入是当前正确答案
-            decoder_input = target_variable[t].view(1, -1)  # view()将取出的.[t] tensor([...])改为tensor([[...]])
+            decoder_input = target_variable[t].view(1, -1)  # view()将取出的.[t] size([...])即list改为size([[...]])即matrix，shape(1, batch_size)
             #计算累计的loss, mask_loss: nTotal平均loss
             mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
             loss += mask_loss
@@ -347,8 +350,11 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
         for t in range(max_target_len):
             decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden, encoder_outputs)
             # 不是teacher forcing: 下一个时刻的输入是当前模型预测概率最高的值
-            _, topi = decoder_output.topK(1)
-            decoder_input = torch.LongTensor([[topi[i][0] for i in range(batch_size)]])
+            # _, topi = decoder_output.topK(1)
+            # decoder_input = torch.LongTensor([[topi[i][0] for i in range(batch_size)]])
+            # solve error 'Tensor' object has no attribute 'topK'
+            _, topi = decoder_output.max(1)
+            decoder_input = torch.LongTensor([[topi[i] for i in range(batch_size)]])
             decoder_input =decoder_input.to(device)
             #计算累计的loss, mask_loss: nTotal的平均loss
             mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
@@ -452,7 +458,7 @@ class GreedySearchDecoder(nn.Module):
             all_tokens = torch.cat((all_tokens, decoder_input), dim=0)
             all_scores = torch.cat((all_scores, decoder_scores), dim=0)
             # decoder_input是当前时刻输出的词的ID，这是个一维的向量，因为max会减少一维。
-            # 但是decoder要求有一个batch维度，因此用unsqueeze增加batch维度。
+            # 但是decoder要求有一个batch维度，因此用unsqueeze增加batch维度。decoder_input shape(input_step=1, batch_size=1(即decoder_input的ID维度))
             decoder_input = torch.unsqueeze(decoder_input, 0)
 
         # 返回所有的词和得分。
@@ -461,13 +467,14 @@ class GreedySearchDecoder(nn.Module):
 
 def evaluate(encoder, decoder, searcher, voc, sentence, max_length=MAX_LENGTH):
     # 输入的一个batch句子变成id
-    indexes_batch = [indexesFromSentence(voc, sentence)]
+    indexes_batch = [indexesFromSentence(voc, sentence)]    # shape(batch, lengths)
     # 创建lengths tensor
     lengths = torch.tensor([len(indexes) for indexes in indexes_batch])
     # 转置
-    input_batch = torch.LongTensor(indexes_batch).transpose(0, 1)
+    input_batch = torch.LongTensor(indexes_batch).transpose(0, 1)   # shape(lengths=len(sentence), batch=1)
     # to GPU
     input_batch = input_batch.to(device)
+    lengths = lengths.to(device)
     # use GreedySearchDecoder
     tokens, scores = searcher(input_batch, lengths, max_length)
     # ID变成词

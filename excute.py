@@ -59,7 +59,7 @@ batch_size = 64
 
 # 配置超参数和优化器
 clip = 5.0
-teacher_forcing_ratio = 1.0
+teacher_forcing_ratio = 0.5
 learning_rate = 0.0001
 decoder_learning_ratio = 5.0
 n_iteration = 100000
@@ -69,6 +69,10 @@ save_every = 10000
 # 从哪个checkpoint恢复，如果是None，那么从头开始训练。
 loadFilename = None
 checkpoint_iter = 4000
+
+# loadFilename = os.path.join(save_dir, model_name, corpus_name,
+#                            '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, hidden_size),
+#                            '{}_checkpoint.tar'.format(checkpoint_iter))
 
 # 如果loadFilename不空，则从中加载模型
 if loadFilename:
