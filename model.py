@@ -25,7 +25,7 @@ import numpy as np
 USE_CUDA = torch.cuda.is_available()
 device = torch.device('cuda' if USE_CUDA else 'cpu')
 
-MAX_LENGTH = 10  # Maximun sentence length to consider
+MAX_LENGTH = 15  # Maximun sentence length to consider
 
 #
 # # load voc and pairs
@@ -128,7 +128,7 @@ class EncoderRNN(nn.Module):
         self.n_layers = n_layers
         self.hidden_size = hidden_size
         self.embedding = embedding
-        # input and hidden is hidden_size
+        # input_seq features and hidden features is hidden_size
         self.gru = nn.GRU(hidden_size, hidden_size, n_layers,
             dropout=(0 if n_layers == 1 else dropout), bidirectional= True)
 
@@ -152,7 +152,7 @@ class EncoderRNN(nn.Module):
         # 函数pad_packed_sequence把它变成一个shape为(max_length, batch, hidden*num_directions)的向量以及
         # 一个list，表示输出的长度，当然这个list和输入的input_lengths完全一样，因此通常我们不需要它。
         # hidden: updated hidden state from GRU; shape=(n_layers x num_directions, batch_size, hidden_size)
-        outputs, hidden = self.gru(packed, hidden)
+        outputs, hidden = self.gru(packed, hidden)  # hidden shape(n_layers x num_directions, batch_size, hidden_size)里的所有初始值设为None
 
         # 参考前面的注释，我们得到outputs为(max_length, batch, hidden*num_directions)
         outputs, _ = torch.nn.utils.rnn.pad_packed_sequence(outputs)
@@ -441,7 +441,7 @@ class GreedySearchDecoder(nn.Module):
     def forward(self, input_seq, input_length, max_length):
         # Encoder的Forward计算
         encoder_outputs, encoder_hidden = self.encoder(input_seq, input_length)
-        # 把Encoder最后时刻的隐状态作为Decoder的初始值
+        # 把Encoder的encoder_hidden(n_layers*num_directions, batch, hidden_size)最后时刻得双向隐状态作为Decoder的初始值
         decoder_hidden = encoder_hidden[:self.decoder.n_layers]
         # 因为我们的函数都是要求(time,batch)，因此即使只有一个数据，也要做出二维的。
         # Decoder的初始输入是SOS
